@@ -1,4 +1,4 @@
-// TerminalIRC.java
+package com.tama.irc;// TerminalIRC.java
 // Simple terminal-based IRC client for Java (no GUI).
 // Basic commands: /server, /nick, /join, /part, /msg, /quit, /topic, /names, /list, /whois, /raw
 // Compile: javac TerminalIRC.java
@@ -6,6 +6,7 @@
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -14,6 +15,13 @@ public class Main {
     // --- Color helpers ---
     private static final String RESET = "\u001B[0m";
     private static final String BOLD = "\u001B[1m";
+    private static final String DIM = "\u001B[2m";
+    private static final String ITALIC = "\u001B[3m";
+    private static final String UNDERLINE = "\u001B[4m";
+    private static final String BLINKING = "\u001B[5m";
+    private static final String STRIKETHROUGH = "\u001B[9m";
+
+    private static final String BELL = "\u0007";
 
     private static final String RED = "\u001B[31m";
     private static final String GREEN = "\u001B[32m";
@@ -32,9 +40,9 @@ public class Main {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private Thread readerThread;
     private String currentTarget = null; // current channel or nick for plain messages
-    private String nick = "JavaUser";
-    private String user = "javairc";
-    private String realname = "Terminal IRC Client";
+    private String nick = "User" + (int)(Math.random() * 1000);
+    private final String user = "javairc";
+    private final String realname = "Terminal IRC Client";
     private int lastServerPort = 6667;
     private String lastServerHost = null;
 
@@ -79,8 +87,17 @@ public class Main {
     }
 
     private void printBanner() {
-        System.out.println("Terminal IRC Client (simple) — commands: /server, /nick, /join, /part, /msg, /quit, /topic, /names, /list, /whois, /raw");
-        System.out.println("Type /help for more info.");
+        System.out.println(BOLD + GREEN + """
+                ::::::'##::::'###::::'##::::'##::::'###::::'####:'########:::'######::
+                :::::: ##:::'## ##::: ##:::: ##:::'## ##:::. ##:: ##.... ##:'##... ##:
+                :::::: ##::'##:. ##:: ##:::: ##::'##:. ##::: ##:: ##:::: ##: ##:::..::
+                :::::: ##:'##:::. ##: ##:::: ##:'##:::. ##:: ##:: ########:: ##:::::::
+                '##::: ##: #########:. ##:: ##:: #########:: ##:: ##.. ##::: ##:::::::
+                 ##::: ##: ##.... ##::. ## ##::: ##.... ##:: ##:: ##::. ##:: ##::: ##:
+                . ######:: ##:::: ##:::. ###:::: ##:::: ##:'####: ##:::. ##:. ######::
+                :......:::..:::::..:::::...:::::..:::::..::....::..:::::..:::......:::""" + RESET);
+        System.out.println(DIM + "Terminal IRC Client (simple) — commands: /server, /nick, /join, /part, /msg, /quit, /topic, /names, /list, /whois, /raw" + RESET);
+        System.out.println(DIM + "Type /help for more info." + RESET);
     }
 
     private void handleCommand(String line) {
@@ -242,8 +259,8 @@ public class Main {
             println("Connecting to " + host + ":" + port + " ...");
             socket = new Socket();
             socket.connect(new InetSocketAddress(host, port), 10000);
-            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             connected.set(true);
             lastServerHost = host;
             lastServerPort = port;
@@ -253,7 +270,7 @@ public class Main {
             sendRaw("USER " + user + " 0 * :" + realname);
 
             startReaderThread();
-            println("Connected. Registered as " + nick + ". Use /join to enter channels.");
+            println("Connected. Registered as " + nick + ". Use /join to enter channels." + BELL);
         } catch (IOException e) {
             printlnErr("Connection failed: " + e.getMessage());
             safeClose();
@@ -282,14 +299,14 @@ public class Main {
     private static String colorNick(String nick) {
         // Assign color based on hash of nick
         int h = Math.abs(nick.hashCode());
-        switch (h % 6) {
-            case 0: return CYAN + nick + RESET;
-            case 1: return GREEN + nick + RESET;
-            case 2: return MAGENTA + nick + RESET;
-            case 3: return YELLOW + nick + RESET;
-            case 4: return BLUE + nick + RESET;
-            default: return WHITE + nick + RESET;
-        }
+        return switch (h % 6) {
+            case 0 -> CYAN + nick + RESET;
+            case 1 -> GREEN + nick + RESET;
+            case 2 -> MAGENTA + nick + RESET;
+            case 3 -> YELLOW + nick + RESET;
+            case 4 -> BLUE + nick + RESET;
+            default -> WHITE + nick + RESET;
+        };
     }
 
     private synchronized void handleServerLine(String raw) {
@@ -461,9 +478,10 @@ public class Main {
     // Print helpers (synchronized to avoid interleaving with reader thread)
     private static synchronized void println(String s) {
         System.out.println(s);
+        Bell();
     }
     private static synchronized void printlnErr(String s) {
-        System.err.println(s);
+        System.err.println(BOLD + RED + UNDERLINE + s + RESET);
     }
     private static synchronized void printlnSent(String s) {
         System.out.println(s);
@@ -472,5 +490,9 @@ public class Main {
     private static String timestamp() {
         java.time.LocalTime now = java.time.LocalTime.now();
         return GRAY + "[" + now.truncatedTo(java.time.temporal.ChronoUnit.MINUTES) + "]" + RESET;
+    }
+
+    private static void Bell() {
+        java.awt.Toolkit.getDefaultToolkit().beep();
     }
 }
