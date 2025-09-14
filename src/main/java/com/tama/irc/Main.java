@@ -4,10 +4,13 @@ package com.tama.irc;// TerminalIRC.java
 // Compile: javac TerminalIRC.java
 // Run:     java TerminalIRC
 
+import javax.swing.text.StyleConstants;
+import java.awt.*;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Main {
@@ -41,14 +44,20 @@ public class Main {
     private Thread readerThread;
     private String currentTarget = null; // current channel or nick for plain messages
     private String nick = "User" + (int)(Math.random() * 1000);
-    private final String user = "javairc";
-    private final String realname = "Terminal IRC Client";
+    private final String user = "java-irc";
+    private final String realname = "Java IRC Client";
     private int lastServerPort = 6667;
     private String lastServerHost = null;
 
     public static void main(String[] args) {
         Main client = new Main();
         client.run();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            String quitMsg = "Client Disconnected";
+            client.sendRaw("QUIT :" + quitMsg);
+            client.safeClose();
+        }));
+
     }
 
     private void run() {
@@ -71,14 +80,16 @@ public class Main {
             } else {
                 // plain message: send to current target if set, else warn
                 if (!connected.get()) {
-                    printlnErr("Not connected. Use /server host [port] to connect.");
+                    printlnErr(RED + BOLD + UNDERLINE + "Not connected. Use /server host [port] to connect." + RESET);
                     continue;
                 }
                 if (currentTarget == null) {
-                    printlnErr("No current target. Join a channel (/join #chan) or /msg nick targetMessage");
+                    printlnErr(RED + BOLD + UNDERLINE + "No current target. Join a channel (/join #chan) or /msg nick targetMessage" + RESET);
                     continue;
                 }
                 sendPrivmsg(currentTarget, line);
+//                println(timestamp() + " <" + colorNick(nick) + "> " + line);
+
             }
         }
 
@@ -88,16 +99,17 @@ public class Main {
 
     private void printBanner() {
         System.out.println(BOLD + GREEN + """
-                ::::::'##::::'###::::'##::::'##::::'###::::'####:'########:::'######::
-                :::::: ##:::'## ##::: ##:::: ##:::'## ##:::. ##:: ##.... ##:'##... ##:
-                :::::: ##::'##:. ##:: ##:::: ##::'##:. ##::: ##:: ##:::: ##: ##:::..::
-                :::::: ##:'##:::. ##: ##:::: ##:'##:::. ##:: ##:: ########:: ##:::::::
-                '##::: ##: #########:. ##:: ##:: #########:: ##:: ##.. ##::: ##:::::::
-                 ##::: ##: ##.... ##::. ## ##::: ##.... ##:: ##:: ##::. ##:: ##::: ##:
-                . ######:: ##:::: ##:::. ###:::: ##:::: ##:'####: ##:::. ##:. ######::
-                :......:::..:::::..:::::...:::::..:::::..::....::..:::::..:::......:::""" + RESET);
-        System.out.println(DIM + "Terminal IRC Client (simple) — commands: /server, /nick, /join, /part, /msg, /quit, /topic, /names, /list, /whois, /raw" + RESET);
-        System.out.println(DIM + "Type /help for more info." + RESET);
+                ::::::'##::::'###::::'##::::'##::::'###:::::::::::::'####:'########:::'######::
+                :::::: ##:::'## ##::: ##:::: ##:::'## ##::::::::::::. ##:: ##.... ##:'##... ##:
+                :::::: ##::'##:. ##:: ##:::: ##::'##:. ##:::::::::::: ##:: ##:::: ##: ##:::..::
+                :::::: ##:'##:::. ##: ##:::: ##:'##:::. ##:'#######:: ##:: ########:: ##:::::::
+                '##::: ##: #########:. ##:: ##:: #########:........:: ##:: ##.. ##::: ##:::::::
+                 ##::: ##: ##.... ##::. ## ##::: ##.... ##::::::::::: ##:: ##::. ##:: ##::: ##:
+                . ######:: ##:::: ##:::. ###:::: ##:::: ##::::::::::'####: ##:::. ##:. ######::
+                :......:::..:::::..:::::...:::::..:::::..:::::::::::....::..:::::..:::......:::""" + RESET);
+        System.out.println(DIM + GRAY + "Java IRC — commands: /server, /nick, /join, /part, /msg, /quit, /topic, /names, /list, /whois, /raw" + RESET);
+        System.out.println(DIM + GRAY + "Type /help for more info." + RESET);
+        System.out.println(GREEN + "To auto-join Codiaks channel, type /auto_join" + RESET);
     }
 
     private void handleCommand(String line) {
@@ -106,6 +118,11 @@ public class Main {
 
         try {
             switch (cmd) {
+                case "/auto_join":
+                    connect("irc.libera.chat", 6667);
+                    sendRaw("JOIN #CoolDudes");
+                    currentTarget = "#CoolDudes";
+                    break;
                 case "/help":
                     showHelp();
                     break;
@@ -224,21 +241,22 @@ public class Main {
     }
 
     private void showHelp() {
-        println("Commands:");
-        println(" /server host [port]      - Connect to an IRC server (default port 6667)");
-        println(" /nick <nick>             - Change your nickname");
-        println(" /join #channel           - Join a channel");
-        println(" /part #channel [reason]  - Part a channel");
-        println(" /msg <target> <message>  - Send a PRIVMSG to a target (nick or #channel)");
-        println(" /topic #channel <topic>  - Set channel topic");
-        println(" /names #channel          - Request NAMES for a channel");
-        println(" /list                    - Request channel list");
-        println(" /whois <nick>            - WHOIS a nick");
-        println(" /raw <raw line...>       - Send a raw IRC protocol line");
-        println(" /current                 - Show current message target");
-        println(" /serverinfo              - Show connected server info");
-        println(" /quit [message]          - Quit and disconnect");
-        println("Plain text lines (not starting with /) send PRIVMSG to the current target.");
+        println("""
+         Commands:
+         /server host [port]      - Connect to an IRC server (default port 6667)
+         /nick <nick>             - Change your nickname
+         /join #channel           - Join a channel
+         /part #channel [reason]  - Part a channel
+         /msg <target> <message>  - Send a PRIVMSG to a target (nick or #channel)
+         /topic #channel <topic>  - Set channel topic
+         /names #channel          - Request NAMES for a channel
+         /list                    - Request channel list
+         /whois <nick>            - WHOIS a nick
+         /raw <raw line...>       - Send a raw IRC protocol line
+         /current                 - Show current message target
+         /serverinfo              - Show connected server info
+         /quit [message]          - Quit and disconnect
+        Plain text lines (not starting with /) send PRIVMSG to the current target.""");
     }
 
     private boolean ensureConnected() {
@@ -288,6 +306,8 @@ public class Main {
                 if (connected.get()) {
                     printlnErr("Connection lost: " + e.getMessage());
                 }
+            } catch (AWTException e) {
+                throw new RuntimeException(e);
             } finally {
                 safeClose();
             }
@@ -309,11 +329,11 @@ public class Main {
         };
     }
 
-    private synchronized void handleServerLine(String raw) {
+    private synchronized void handleServerLine(String raw) throws AWTException {
         if (raw.startsWith("PING ")) {
             String token = raw.substring(5);
             sendRaw("PONG " + token);
-            println(GRAY + "[server] PING -> PONG " + token + RESET);
+//            println(GRAY + "[server] PING -> PONG " + token + RESET);
             return;
         }
 
@@ -374,6 +394,7 @@ public class Main {
                         String targetColor = target.startsWith("#") ? BLUE + target + RESET : target;
                         // Normal incoming message -> GREEN
                         println(timestamp() + " " + GREEN + "<" + coloredNick + "@" + targetColor + "> " + msg + RESET);
+                        Notify("<" + nick + "> " + msg, this.currentTarget);
                     }
                 }
                 break;
@@ -404,7 +425,7 @@ public class Main {
                 break;
             default:
                 // Server numerics or unhandled commands
-                println(GRAY + "[server] " + raw + RESET);
+                println(DIM + GRAY + "[server] " + raw + RESET);
         }
     }
 
@@ -421,7 +442,7 @@ public class Main {
             // echo locally in a friendly way for commands we send
             // (avoid echoing raw PRIVMSG content twice when user typed it)
             if (!data.startsWith("PONG") && !data.startsWith("PASS")) {
-                printlnSent("> " + data);
+//                printlnSent("> " + data);
             }
         } catch (IOException e) {
             printlnErr("Failed to send: " + e.getMessage());
@@ -478,7 +499,6 @@ public class Main {
     // Print helpers (synchronized to avoid interleaving with reader thread)
     private static synchronized void println(String s) {
         System.out.println(s);
-        Bell();
     }
     private static synchronized void printlnErr(String s) {
         System.err.println(BOLD + RED + UNDERLINE + s + RESET);
@@ -494,5 +514,22 @@ public class Main {
 
     private static void Bell() {
         java.awt.Toolkit.getDefaultToolkit().beep();
+    }
+
+    private static void Notify(String message, String channel) throws AWTException {
+            if (!SystemTray.isSupported()) {
+                System.out.println("SystemTray is not supported");
+                return;
+            }
+
+            SystemTray tray = SystemTray.getSystemTray();
+            Image image = Toolkit.getDefaultToolkit().createImage("icon.png"); // Optional: path to an icon image
+            TrayIcon trayIcon = new TrayIcon(image, "IRC Message");
+            trayIcon.setImageAutoSize(true);
+            trayIcon.setToolTip("IRC Message");
+            tray.add(trayIcon);
+
+            trayIcon.displayMessage(channel, message, TrayIcon.MessageType.INFO);
+            Bell();
     }
 }
