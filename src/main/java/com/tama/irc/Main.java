@@ -33,7 +33,6 @@ public class Main {
     private static final String MAGENTA = "\u001B[35m";
     private static final String CYAN = "\u001B[36m";
     private static final String WHITE = "\u001B[37m";
-
     private static final String GRAY = "\u001B[90m";
 
     private Socket socket;
@@ -288,7 +287,8 @@ public class Main {
             sendRaw("USER " + user + " 0 * :" + realname);
 
             startReaderThread();
-            println("Connected. Registered as " + nick + ". Use /join to enter channels." + BELL);
+            println("Connected. Registered as " + nick + ". Use /join to enter channels.");
+            Bell();
         } catch (IOException e) {
             printlnErr("Connection failed: " + e.getMessage());
             safeClose();
